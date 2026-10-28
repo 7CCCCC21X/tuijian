@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>积分批量查询</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1c1f24;
+    --muted: #6b7280;
+    --border: #e3e5e9;
+    --accent: #2f6fed;
+    --accent-weak: #e8effd;
+    --ok: #15803d;
+    --ok-weak: #e7f6ec;
+    --warn: #b45309;
+    --warn-weak: #fdf3e2;
+    --err: #b91c1c;
+    --err-weak: #fde8e8;
+    --row-hover: #f3f6fc;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121417; --card: #1b1e23; --text: #e7e9ee; --muted: #9aa2ad; --border: #2c3139;
+      --accent: #6b9aff; --accent-weak: #1f2b45; --ok: #4ade80; --ok-weak: #15301f;
+      --warn: #fbbf24; --warn-weak: #3a2a0c; --err: #f87171; --err-weak: #3b1717; --row-hover: #20242b;
+      --shadow: 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121417; --card: #1b1e23; --text: #e7e9ee; --muted: #9aa2ad; --border: #2c3139;
+    --accent: #6b9aff; --accent-weak: #1f2b45; --ok: #4ade80; --ok-weak: #15301f;
+    --warn: #fbbf24; --warn-weak: #3a2a0c; --err: #f87171; --err-weak: #3b1717; --row-hover: #20242b;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 18px; font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .grid { display: grid; gap: 12px; }
+  .grid.settings { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font: inherit; font-size: 13px;
+  }
+  textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row.between { justify-content: space-between; }
+  button {
+    padding: 8px 14px; border-radius: 7px; border: 1px solid var(--border); background: var(--card);
+    color: var(--text); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { background: var(--row-hover); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger { color: var(--err); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.sm { padding: 4px 9px; font-size: 12px; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .progress { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 10px; display: none; }
+  .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .stat .v.accent { color: var(--accent); }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  th { background: var(--bg); font-weight: 600; font-size: 12px; color: var(--muted); position: sticky; top: 0; cursor: pointer; user-select: none; }
+  th.sorted::after { content: " ▾"; color: var(--accent); }
+  th.sorted.asc::after { content: " ▴"; }
+  tbody tr:hover { background: var(--row-hover); }
+  tfoot td { font-weight: 600; background: var(--bg); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.ref { color: var(--accent); font-weight: 600; }
+  .addr { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; cursor: pointer; }
+  .addr:hover { text-decoration: underline; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+  .tag.ok { background: var(--ok-weak); color: var(--ok); }
+  .tag.err { background: var(--err-weak); color: var(--err); }
+  .tag.warn { background: var(--warn-weak); color: var(--warn); }
+  .tag.wait { background: var(--accent-weak); color: var(--accent); }
+  .note-in { width: 140px; padding: 4px 7px; font-size: 12px; border: 1px solid transparent; background: transparent; border-radius: 5px; color: var(--text); font: inherit; }
+  .note-in:hover, .note-in:focus { border-color: var(--border); background: var(--bg); }
+  tr.detail td { background: var(--bg); padding: 10px 14px; white-space: normal; }
+  .weeks { width: auto; font-size: 12px; }
+  .weeks th, .weeks td { padding: 4px 8px; }
+  .weeks tr.before td { background: var(--warn-weak); }
+  .weeks tr.after td { background: var(--ok-weak); }
+  .weeks tr.zero td { color: var(--muted); }
+  .empty { text-align: center; padding: 30px; color: var(--muted); }
+  .saved-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  .saved-item .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .saved-item .meta b { font-size: 14px; }
+  .saved-item .meta span { color: var(--muted); font-size: 12px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--card); border-radius: 10px; padding: 18px; width: 100%; max-width: 520px; border: 1px solid var(--border); }
+  .modal h3 { margin: 0 0 12px; font-size: 16px; }
+  .modal textarea { min-height: 70px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--card); padding: 9px 16px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; }
+  .toast.show { opacity: 1; }
+  details.adv summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 10px; }
+  @media (max-width: 640px) { .wrap { padding: 12px 12px 40px; } h1 { font-size: 18px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>积分批量查询</h1>
+  <p class="sub">数据来源：indexer.predalpha.xyz /api/predict/points/&lt;钱包&gt;。按分界周拆分总积分，并按比例折算推荐积分。</p>
+
+  <div class="card">
+    <h2>参数设置</h2>
+    <div class="grid settings">
+      <label class="f">分界周（第 N 周起算作"后"）
+        <input type="number" id="cfgWeek" value="27" min="1" step="1">
+      </label>
+      <label class="f">N 周前推荐比例 (%)
+        <input type="number" id="cfgRateBefore" value="20" min="0" step="0.1">
+      </label>
+      <label class="f">N 周后推荐比例 (%)
+        <input type="number" id="cfgRateAfter" value="10" min="0" step="0.1">
+      </label>
+      <label class="f">并发请求数
+        <input type="number" id="cfgConc" value="3" min="1" max="10" step="1">
+      </label>
+    </div>
+    <details class="adv">
+      <summary>高级：接口地址 / 跨域代理</summary>
+      <div class="grid settings" style="margin-top:8px">
+        <label class="f">接口前缀（钱包地址会拼接在末尾）
+          <input type="text" id="cfgApi" value="https://indexer.predalpha.xyz/api/predict/points/">
+        </label>
+        <label class="f">代理前缀（可选，如 https://corsproxy.io/? ，留空直连）
+          <input type="text" id="cfgProxy" value="" placeholder="留空直连">
+        </label>
+      </div>
+      <p class="hint">说明："N 周前"= 第 1 ～ N-1 周之和；"N 周后"= 第 N 周及以后之和。推荐积分 = 对应区间积分 × 比例。若浏览器提示跨域（CORS）失败，可填代理前缀，或使用下方"导入 JSON"手动粘贴接口返回。</p>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>钱包地址 <span class="hint" id="addrCount"></span></h2>
+    <textarea id="addrInput" placeholder="每行一个钱包地址，也支持用逗号、空格分隔&#10;0xc2575817e46359975cef23e9c655d9f48a896b0c&#10;0x..."></textarea>
+    <div class="row between" style="margin-top:10px">
+      <div class="row">
+        <button class="primary" id="btnQuery">开始查询</button>
+        <button id="btnRetryFailed" disabled>重试失败项</button>
+        <button id="btnImport">导入 JSON</button>
+        <button id="btnClear">清空输入</button>
+      </div>
+      <span class="hint" id="progressText"></span>
+    </div>
+    <div class="progress" id="progress"><div></div></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div class="row between" style="margin-bottom:12px">
+      <h2 style="margin:0">查询结果 <span class="hint" id="resultMeta"></span></h2>
+      <div class="row">
+        <input type="text" id="filterText" placeholder="筛选地址 / 备注" style="width:180px">
+        <label class="hint" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="filterNonZero"> 只看有积分</label>
+        <button id="btnSave" class="primary">保存记录</button>
+        <button id="btnCsv">导出 CSV</button>
+        <button id="btnCopyAddr">复制地址列表</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="tbl-wrap">
+      <table id="resultTable">
+        <thead>
+          <tr>
+            <th data-k="idx">#</th>
+            <th data-k="wallet">钱包</th>
+            <th data-k="note">备注</th>
+            <th data-k="rank" class="num">排名</th>
+            <th data-k="total" class="num">榜单总积分</th>
+            <th data-k="before" class="num" id="thBefore">27周前积分</th>
+            <th data-k="after" class="num" id="thAfter">27周后积分</th>
+            <th data-k="refBefore" class="num" id="thRefBefore">推荐(前×20%)</th>
+            <th data-k="refAfter" class="num" id="thRefAfter">推荐(后×10%)</th>
+            <th data-k="refTotal" class="num">推荐合计</th>
+            <th data-k="status">状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+        <tfoot id="resultFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row between" style="margin-bottom:10px">
+      <h2 style="margin:0">已保存记录 <span class="hint" id="savedCount"></span></h2>
+      <div class="row">
+        <button id="btnExportAll" class="sm">导出全部</button>
+        <button id="btnImportRecords" class="sm">导入记录</button>
+      </div>
+    </div>
+    <div id="savedList"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalSave">
+  <div class="modal">
+    <h3 id="modalSaveTitle">保存记录</h3>
+    <label class="f">名称
+      <input type="text" id="saveName" placeholder="例如：10月第4周结算">
+    </label>
+    <label class="f" style="margin-top:10px">备注
+      <textarea id="saveNote" placeholder="可选，记录来源、发放情况等"></textarea>
+    </label>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button id="saveCancel">取消</button>
+      <button class="primary" id="saveOk">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalImport">
+  <div class="modal">
+    <h3>导入接口 JSON</h3>
+    <p class="hint" style="margin:0 0 8px">把接口返回的 JSON 粘贴到下方（可一次粘贴多个，用换行分隔，或直接粘贴 JSON 数组）。导入的数据会加入当前结果。</p>
+    <textarea id="importText" style="min-height:160px" placeholder='{"leaderboard":{...},"wallet":"0x...","weeks":[...]}'></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button id="importCancel">取消</button>
+      <button class="primary" id="importOk">导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const LS_RECORDS = 'pa_points_records_v1';
+  const LS_NOTES = 'pa_wallet_notes_v1';
+  const LS_CFG = 'pa_cfg_v1';
+
+  /** @type {Array<{wallet:string, status:'wait'|'ok'|'err', error?:string, raw?:any, calc?:any}>} */
+  let results = [];
+  let sortKey = 'idx', sortAsc = true;
+  let running = false;
+  let walletNotes = loadJSON(LS_NOTES, {});
+  let records = loadJSON(LS_RECORDS, []);
+  let viewingRecordId = null;
+
+  function loadJSON(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('本地存储失败：' + e.message); } }
+
+  function cfg() {
+    return {
+      week: Math.max(1, parseInt($('#cfgWeek').value, 10) || 27),
+      rateBefore: parseFloat($('#cfgRateBefore').value) || 0,
+      rateAfter: parseFloat($('#cfgRateAfter').value) || 0,
+      conc: Math.min(10, Math.max(1, parseInt($('#cfgConc').value, 10) || 3)),
+      api: $('#cfgApi').value.trim() || 'https://indexer.predalpha.xyz/api/predict/points/',
+      proxy: $('#cfgProxy').value.trim(),
+    };
+  }
+  function persistCfg() { saveJSON(LS_CFG, cfg()); }
+  (function restoreCfg() {
+    const c = loadJSON(LS_CFG, null);
+    if (!c) return;
+    if (c.week) $('#cfgWeek').value = c.week;
+    if (c.rateBefore != null) $('#cfgRateBefore').value = c.rateBefore;
+    if (c.rateAfter != null) $('#cfgRateAfter').value = c.rateAfter;
+    if (c.conc) $('#cfgConc').value = c.conc;
+    if (c.api) $('#cfgApi').value = c.api;
+    if (c.proxy != null) $('#cfgProxy').value = c.proxy;
+  })();
+
+  function fmt(n, d = 2) {
+    if (n == null || isNaN(n)) return '-';
+    return Number(n).toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function short(a) { return a.slice(0, 6) + '…' + a.slice(-4); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); }
+  function tsStr(t) { const d = new Date(t); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+  function parseAddrs(text) {
+    const found = text.match(/0x[0-9a-fA-F]{40}/g) || [];
+    const seen = new Set(); const out = [];
+    for (const a of found) { const l = a.toLowerCase(); if (!seen.has(l)) { seen.add(l); out.push(l); } }
+    return out;
+  }
+
+  // ---- 核心计算 ----
+  function calc(raw, c) {
+    const weeks = Array.isArray(raw.weeks) ? raw.weeks : [];
+    let before = 0, after = 0, refPtsBefore = 0, refPtsAfter = 0, uncalc = 0, trades = 0;
+    for (const w of weeks) {
+      const p = Number(w.points) || 0;
+      const rp = Number(w.referral_points) || 0;
+      trades += Number(w.trade_count) || 0;
+      if (w.calculated === false && (Number(w.trade_count) || 0) > 0) uncalc++;
+      if (Number(w.week) < c.week) { before += p; refPtsBefore += rp; } else { after += p; refPtsAfter += rp; }
+    }
+    const lb = raw.leaderboard || {};
+    return {
+      rank: lb.rank ?? null,
+      total: lb.total_points != null ? Number(lb.total_points) : before + after,
+      before, after,
+      refBefore: before * c.rateBefore / 100,
+      refAfter: after * c.rateAfter / 100,
+      refTotal: before * c.rateBefore / 100 + after * c.rateAfter / 100,
+      officialRef: refPtsBefore + refPtsAfter,
+      uncalc, trades, weekCount: weeks.length,
+    };
+  }
+  function recalcAll() { const c = cfg(); for (const r of results) if (r.raw) r.calc = calc(r.raw, c); }
+
+  // ---- 查询 ----
+  async function fetchWallet(wallet, c) {
+    const url = c.proxy + c.api + wallet;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data || !Array.isArray(data.weeks)) throw new Error('返回格式异常');
+    return data;
+  }
+
+  async function runQueries(targets) {
+    if (running) return;
+    running = true; viewingRecordId = null;
+    const c = cfg(); persistCfg();
+    $('#btnQuery').disabled = true; $('#btnRetryFailed').disabled = true;
+    const total = targets.length; let done = 0;
+    $('#progress').style.display = 'block';
+    const setProg = () => { $('#progress > div').style.width = (done / total * 100) + '%'; $('#progressText').textContent = `进度 ${done}/${total}`; };
+    setProg(); render();
+    let i = 0;
+    const worker = async () => {
+      while (i < targets.length) {
+        const r = targets[i++];
+        r.status = 'wait'; r.error = '';
+        try {
+          r.raw = await fetchWallet(r.wallet, c);
+          r.calc = calc(r.raw, c); r.status = 'ok';
+        } catch (e) {
+          r.status = 'err';
+          r.error = (e && e.message) || String(e);
+          if (/Failed to fetch|NetworkError|Load failed/i.test(r.error)) r.error += '（可能是跨域限制，可尝试代理或导入 JSON）';
+        }
+        done++; setProg(); render();
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(c.conc, targets.length) }, worker));
+    running = false;
+    $('#btnQuery').disabled = false;
+    $('#btnRetryFailed').disabled = !results.some(r => r.status === 'err');
+    $('#progressText').textContent = `完成：成功 ${results.filter(r => r.status === 'ok').length}，失败 ${results.filter(r => r.status === 'err').length}`;
+    setTimeout(() => { $('#progress').style.display = 'none'; }, 800);
+    render();
+  }
+
+  $('#btnQuery').addEventListener('click', () => {
+    const addrs = parseAddrs($('#addrInput').value);
+    if (!addrs.length) { toast('没有识别到有效的钱包地址（0x + 40 位十六进制）'); return; }
+    results = addrs.map(w => ({ wallet: w, status: 'wait' }));
+    runQueries(results);
+  });
+  $('#btnRetryFailed').addEventListener('click', () => runQueries(results.filter(r => r.status === 'err')));
+  $('#btnClear').addEventListener('click', () => { $('#addrInput').value = ''; updateAddrCount(); });
+  $('#addrInput').addEventListener('input', updateAddrCount);
+  function updateAddrCount() { const n = parseAddrs($('#addrInput').value).length; $('#addrCount').textContent = n ? `已识别 ${n} 个地址` : ''; }
+
+  ['#cfgWeek', '#cfgRateBefore', '#cfgRateAfter'].forEach(s => $(s).addEventListener('input', () => { recalcAll(); persistCfg(); render(); }));
+  ['#cfgConc', '#cfgApi', '#cfgProxy'].forEach(s => $(s).addEventListener('change', persistCfg));
+  $('#filterText').addEventListener('input', render);
+  $('#filterNonZero').addEventListener('change', render);
+
+  // ---- 渲染 ----
+  function visibleRows() {
+    const q = $('#filterText').value.trim().toLowerCase();
+    const nz = $('#filterNonZero').checked;
+    let rows = results.map((r, i) => ({ r, i }));
+    if (q) rows = rows.filter(({ r }) => r.wallet.includes(q) || (walletNotes[r.wallet] || '').toLowerCase().includes(q));
+    if (nz) rows = rows.filter(({ r }) => r.calc && (r.calc.before + r.calc.after) > 0);
+    const val = ({ r, i }) => {
+      switch (sortKey) {
+        case 'idx': return i;
+        case 'wallet': return r.wallet;
+        case 'note': return walletNotes[r.wallet] || '';
+        case 'status': return r.status;
+        case 'rank': return r.calc && r.calc.rank != null ? r.calc.rank : Infinity;
+        default: return r.calc ? r.calc[sortKey] : -Infinity;
+      }
+    };
+    rows.sort((a, b) => { const x = val(a), y = val(b); const s = x < y ? -1 : x > y ? 1 : 0; return sortAsc ? s : -s; });
+    return rows;
+  }
+
+  function render() {
+    const c = cfg();
+    const has = results.length > 0;
+    $('#resultCard').style.display = has ? '' : 'none';
+    if (!has) return;
+    $('#thBefore').textContent = `${c.week}周前积分`;
+    $('#thAfter').textContent = `${c.week}周后积分`;
+    $('#thRefBefore').textContent = `推荐(前×${c.rateBefore}%)`;
+    $('#thRefAfter').textContent = `推荐(后×${c.rateAfter}%)`;
+    document.querySelectorAll('#resultTable th[data-k]').forEach(th => { th.classList.toggle('sorted', th.dataset.k === sortKey); th.classList.toggle('asc', th.dataset.k === sortKey && sortAsc); });
+
+    const rows = visibleRows();
+    const ok = results.filter(r => r.status === 'ok');
+    const sum = k => ok.reduce((s, r) => s + (r.calc[k] || 0), 0);
+    const vis = rows.filter(({ r }) => r.status === 'ok');
+    const vsum = k => vis.reduce((s, { r }) => s + (r.calc[k] || 0), 0);
+
+    $('#resultMeta').textContent = viewingRecordId ? '（查看已保存记录）' : '';
+    $('#stats').innerHTML = [
+      ['钱包数', `${results.length}`, ''],
+      ['成功 / 失败', `${ok.length} / ${results.filter(r => r.status === 'err').length}`, ''],
+      [`${c.week}周前总积分`, fmt(sum('before')), ''],
+      [`${c.week}周后总积分`, fmt(sum('after')), ''],
+      [`推荐积分(前×${c.rateBefore}%)`, fmt(sum('refBefore')), 'accent'],
+      [`推荐积分(后×${c.rateAfter}%)`, fmt(sum('refAfter')), 'accent'],
+      ['推荐积分合计', fmt(sum('refTotal')), 'accent'],
+    ].map(([k, v, cls]) => `<div class="stat"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`).join('');
+
+    const body = rows.map(({ r, i }) => {
+      const cl = r.calc;
+      const note = esc(walletNotes[r.wallet] || '');
+      let status;
+      if (r.status === 'ok') status = cl.uncalc ? `<span class="tag warn" title="有 ${cl.uncalc} 周尚未结算">成功·${cl.uncalc}周未结算</span>` : '<span class="tag ok">成功</span>';
+      else if (r.status === 'err') status = `<span class="tag err" title="${esc(r.error || '')}">失败</span> <span class="hint">${esc(r.error || '')}</span>`;
+      else status = '<span class="tag wait">查询中</span>';
+      const main = `<tr data-i="${i}">
+        <td>${i + 1}</td>
+        <td><span class="addr" data-copy="${r.wallet}" title="点击复制 ${r.wallet}">${short(r.wallet)}</span></td>
+        <td><input class="note-in" data-note="${r.wallet}" value="${note}" placeholder="添加备注"></td>
+        <td class="num">${cl && cl.rank != null ? cl.rank : '-'}</td>
+        <td class="num">${cl ? fmt(cl.total) : '-'}</td>
+        <td class="num">${cl ? fmt(cl.before) : '-'}</td>
+        <td class="num">${cl ? fmt(cl.after) : '-'}</td>
+        <td class="num ref">${cl ? fmt(cl.refBefore) : '-'}</td>
+        <td class="num ref">${cl ? fmt(cl.refAfter) : '-'}</td>
+        <td class="num ref">${cl ? fmt(cl.refTotal) : '-'}</td>
+        <td>${status}</td>
+        <td>${cl ? `<button class="sm" data-detail="${i}">${r._open ? '收起' : '详情'}</button>` : ''}${r.status === 'err' && !viewingRecordId ? ` <button class="sm" data-retry="${i}">重试</button>` : ''}</td>
+      </tr>`;
+      return main + (r._open && cl ? detailRow(r, c) : '');
+    }).join('');
+    $('#resultBody').innerHTML = body || `<tr><td colspan="12" class="empty">没有匹配的结果</td></tr>`;
+    $('#resultFoot').innerHTML = `<tr>
+      <td colspan="3">合计（当前显示 ${vis.length} 个）</td><td></td>
+      <td class="num">${fmt(vsum('total'))}</td>
+      <td class="num">${fmt(vsum('before'))}</td>
+      <td class="num">${fmt(vsum('after'))}</td>
+      <td class="num ref">${fmt(vsum('refBefore'))}</td>
+      <td class="num ref">${fmt(vsum('refAfter'))}</td>
+      <td class="num ref">${fmt(vsum('refTotal'))}</td>
+      <td colspan="2"></td></tr>`;
+  }
+
+  function detailRow(r, c) {
+    const weeks = (r.raw.weeks || []).slice().sort((a, b) => a.week - b.week);
+    const trs = weeks.map(w => {
+      const p = Number(w.points) || 0;
+      const isBefore = Number(w.week) < c.week;
+      const rate = isBefore ? c.rateBefore : c.rateAfter;
+      const cls = (p === 0 && !(Number(w.trade_count) || 0)) ? 'zero' : (isBefore ? 'before' : 'after');
+      return `<tr class="${cls}"><td>${w.week}</td><td>${tsStr(w.week_start * 1000).slice(0, 10)} ~ ${tsStr(w.week_end * 1000).slice(0, 10)}</td>
+        <td>${isBefore ? '前' : '后'}</td><td class="num">${fmt(p)}</td><td class="num">${fmt(p * rate / 100)}</td>
+        <td class="num">${w.trade_count ?? '-'}</td><td class="num">${fmt(Number(w.free_volume_usdt))}</td><td class="num">${fmt(Number(w.paid_volume_usdt))}</td>
+        <td class="num">${fmt(Number(w.referral_points) || 0)}</td><td>${w.calculated === false ? '<span class="tag warn">未结算</span>' : '<span class="tag ok">已结算</span>'}</td></tr>`;
+    }).join('');
+    return `<tr class="detail"><td colspan="12">
+      <div class="row between" style="margin-bottom:6px"><b>${r.wallet}</b><span class="hint">榜单总积分 ${fmt(r.calc.total)} · 排名 ${r.calc.rank ?? '-'} · 总交易 ${r.calc.trades} 笔 · 官方 referral_points 合计 ${fmt(r.calc.officialRef)}</span></div>
+      <div class="tbl-wrap"><table class="weeks"><thead><tr><th>周</th><th>区间</th><th>分段</th><th class="num">积分</th><th class="num">推荐积分</th><th class="num">交易数</th><th class="num">免费量</th><th class="num">付费量</th><th class="num">referral_points</th><th>状态</th></tr></thead><tbody>${trs}</tbody></table></div>
+    </td></tr>`;
+  }
+
+  document.querySelector('#resultTable thead').addEventListener('click', e => {
+    const th = e.target.closest('th[data-k]'); if (!th) return;
+    if (sortKey === th.dataset.k) sortAsc = !sortAsc; else { sortKey = th.dataset.k; sortAsc = th.dataset.k === 'idx' || th.dataset.k === 'wallet' || th.dataset.k === 'rank' || th.dataset.k === 'note'; }
+    render();
+  });
+  $('#resultBody').addEventListener('click', e => {
+    const d = e.target.closest('[data-detail]'); if (d) { const r = results[+d.dataset.detail]; r._open = !r._open; render(); return; }
+    const rt = e.target.closest('[data-retry]'); if (rt) { runQueries([results[+rt.dataset.retry]]); return; }
+    const cp = e.target.closest('[data-copy]'); if (cp) { copyText(cp.dataset.copy); }
+  });
+  $('#resultBody').addEventListener('change', e => {
+    const n = e.target.closest('[data-note]'); if (!n) return;
+    const w = n.dataset.note; const v = n.value.trim();
+    if (v) walletNotes[w] = v; else delete walletNotes[w];
+    saveJSON(LS_NOTES, walletNotes);
+    if (viewingRecordId) { const rec = records.find(x => x.id === viewingRecordId); if (rec) { const it = rec.items.find(x => x.wallet === w); if (it) { it.note = v; saveJSON(LS_RECORDS, records); } } }
+    toast('备注已保存');
+  });
+  function copyText(t) {
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('已复制'), () => {
+      const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('已复制'); } catch (e) { toast('复制失败'); } ta.remove();
+    });
+  }
+  $('#btnCopyAddr').addEventListener('click', () => copyText(results.map(r => r.wallet).join('\n')));
+
+  // ---- 导出 CSV ----
+  $('#btnCsv').addEventListener('click', () => {
+    const c = cfg();
+    const head = ['序号', '钱包', '备注', '排名', '榜单总积分', `${c.week}周前积分`, `${c.week}周后积分`, `推荐积分(前×${c.rateBefore}%)`, `推荐积分(后×${c.rateAfter}%)`, '推荐积分合计', '未结算周数', '状态'];
+    const lines = [head];
+    visibleRows().forEach(({ r, i }, n) => {
+      const cl = r.calc || {};
+      lines.push([n + 1, r.wallet, walletNotes[r.wallet] || '', cl.rank ?? '', cl.total ?? '', cl.before ?? '', cl.after ?? '', cl.refBefore ?? '', cl.refAfter ?? '', cl.refTotal ?? '', cl.uncalc ?? '', r.status === 'ok' ? '成功' : (r.error || '失败')]);
+    });
+    const csv = '﻿' + lines.map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    download(`积分查询_${tsStr(Date.now()).replace(/[: ]/g, '-')}.csv`, csv, 'text/csv');
+  });
+  function download(name, content, type) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ---- 导入 JSON ----
+  $('#btnImport').addEventListener('click', () => { $('#importText').value = ''; $('#modalImport').classList.add('show'); });
+  $('#importCancel').addEventListener('click', () => $('#modalImport').classList.remove('show'));
+  $('#importOk').addEventListener('click', () => {
+    const text = $('#importText').value.trim(); if (!text) return;
+    let objs = [];
+    try { const v = JSON.parse(text); objs = Array.isArray(v) ? v : [v]; }
+    catch (e) {
+      // 多个 JSON 对象拼在一起：逐个截取
+      let depth = 0, start = -1;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '{') { if (depth === 0) start = i; depth++; }
+        else if (ch === '}') { depth--; if (depth === 0 && start >= 0) { try { objs.push(JSON.parse(text.slice(start, i + 1))); } catch (_) { } start = -1; } }
+      }
+    }
+    const valid = objs.filter(o => o && Array.isArray(o.weeks));
+    if (!valid.length) { toast('未识别到有效的接口返回（需包含 weeks 数组）'); return; }
+    const c = cfg(); let added = 0;
+    for (const o of valid) {
+      const w = String(o.wallet || '').toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(w)) continue;
+      let r = results.find(x => x.wallet === w);
+      if (!r) { r = { wallet: w }; results.push(r); }
+      r.raw = o; r.calc = calc(o, c); r.status = 'ok'; r.error = ''; added++;
+    }
+    viewingRecordId = null;
+    $('#modalImport').classList.remove('show');
+    toast(`已导入 ${added} 个钱包`); render();
+  });
+
+  // ---- 保存记录 ----
+  $('#btnSave').addEventListener('click', () => {
+    if (!results.some(r => r.status === 'ok')) { toast('没有可保存的成功结果'); return; }
+    const c = cfg();
+    $('#modalSaveTitle').textContent = '保存记录';
+    $('#saveName').value = `${tsStr(Date.now())} · ${results.filter(r => r.status === 'ok').length} 个钱包`;
+    $('#saveNote').value = '';
+    $('#modalSave').classList.add('show'); $('#saveName').focus();
+    $('#saveOk').onclick = () => {
+      const rec = {
+        id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        time: Date.now(),
+        name: $('#saveName').value.trim() || tsStr(Date.now()),
+        note: $('#saveNote').value.trim(),
+        cfg: { week: c.week, rateBefore: c.rateBefore, rateAfter: c.rateAfter },
+        items: results.filter(r => r.status === 'ok').map(r => ({ wallet: r.wallet, note: walletNotes[r.wallet] || '', raw: r.raw })),
+      };
+      records.unshift(rec); saveJSON(LS_RECORDS, records);
+      $('#modalSave').classList.remove('show'); toast('记录已保存'); renderSaved();
+    };
+  });
+  $('#saveCancel').addEventListener('click', () => $('#modalSave').classList.remove('show'));
+
+  function recSummary(rec) {
+    const c = { week: rec.cfg.week, rateBefore: rec.cfg.rateBefore, rateAfter: rec.cfg.rateAfter };
+    let before = 0, after = 0, refTotal = 0;
+    for (const it of rec.items) { const cl = calc(it.raw, c); before += cl.before; after += cl.after; refTotal += cl.refTotal; }
+    return { before, after, refTotal };
+  }
+  function renderSaved() {
+    $('#savedCount').textContent = records.length ? `共 ${records.length} 条` : '';
+    if (!records.length) { $('#savedList').innerHTML = '<div class="empty">暂无保存记录。查询后点击"保存记录"即可保存当前结果与备注。</div>'; return; }
+    $('#savedList').innerHTML = records.map(rec => {
+      const s = recSummary(rec);
+      return `<div class="saved-item" data-id="${rec.id}">
+        <div class="meta">
+          <b>${esc(rec.name)}</b>
+          <span>${tsStr(rec.time)} · ${rec.items.length} 个钱包 · 分界第 ${rec.cfg.week} 周 · ${rec.cfg.rateBefore}% / ${rec.cfg.rateAfter}%</span>
+          <span>${rec.cfg.week}周前 ${fmt(s.before)} · ${rec.cfg.week}周后 ${fmt(s.after)} · <b style="color:var(--accent)">推荐合计 ${fmt(s.refTotal)}</b></span>
+          ${rec.note ? `<span>备注：${esc(rec.note)}</span>` : ''}
+        </div>
+        <div class="row">
+          <button class="sm" data-act="view">查看</button>
+          <button class="sm" data-act="edit">改备注</button>
+          <button class="sm" data-act="export">导出</button>
+          <button class="sm danger" data-act="del">删除</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  $('#savedList').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const id = b.closest('[data-id]').dataset.id; const rec = records.find(r => r.id === id); if (!rec) return;
+    const act = b.dataset.act;
+    if (act === 'view') {
+      $('#cfgWeek').value = rec.cfg.week; $('#cfgRateBefore').value = rec.cfg.rateBefore; $('#cfgRateAfter').value = rec.cfg.rateAfter;
+      const c = cfg();
+      results = rec.items.map(it => { if (it.note && !walletNotes[it.wallet]) walletNotes[it.wallet] = it.note; return { wallet: it.wallet, status: 'ok', raw: it.raw, calc: calc(it.raw, c) }; });
+      viewingRecordId = id; $('#btnRetryFailed').disabled = true; $('#progressText').textContent = `已载入记录：${rec.name}`;
+      $('#addrInput').value = rec.items.map(it => it.wallet).join('\n'); updateAddrCount();
+      render(); window.scrollTo({ top: $('#resultCard').offsetTop - 10, behavior: 'smooth' });
+    } else if (act === 'edit') {
+      $('#modalSaveTitle').textContent = '修改记录';
+      $('#saveName').value = rec.name; $('#saveNote').value = rec.note || '';
+      $('#modalSave').classList.add('show');
+      $('#saveOk').onclick = () => { rec.name = $('#saveName').value.trim() || rec.name; rec.note = $('#saveNote').value.trim(); saveJSON(LS_RECORDS, records); $('#modalSave').classList.remove('show'); toast('已更新'); renderSaved(); };
+    } else if (act === 'export') {
+      download(`记录_${rec.name.replace(/[\\/:*?"<>|\s]/g, '_')}.json`, JSON.stringify(rec, null, 2), 'application/json');
+    } else if (act === 'del') {
+      if (!confirm(`确定删除记录「${rec.name}」？`)) return;
+      records = records.filter(r => r.id !== id); saveJSON(LS_RECORDS, records);
+      if (viewingRecordId === id) viewingRecordId = null;
+      renderSaved(); render(); toast('已删除');
+    }
+  });
+  $('#btnExportAll').addEventListener('click', () => {
+    if (!records.length) { toast('没有记录'); return; }
+    download(`积分记录全部_${tsStr(Date.now()).replace(/[: ]/g, '-')}.json`, JSON.stringify({ records, walletNotes }, null, 2), 'application/json');
+  });
+  $('#btnImportRecords').addEventListener('click', () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.onchange = () => {
+      const f = inp.files[0]; if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        try {
+          const v = JSON.parse(fr.result);
+          const list = Array.isArray(v) ? v : (Array.isArray(v.records) ? v.records : (v.items ? [v] : []));
+          let n = 0;
+          for (const rec of list) { if (rec && rec.id && Array.isArray(rec.items)) { if (!records.some(r => r.id === rec.id)) { records.push(rec); n++; } } }
+          if (v.walletNotes && typeof v.walletNotes === 'object') { Object.assign(walletNotes, v.walletNotes); saveJSON(LS_NOTES, walletNotes); }
+          records.sort((a, b) => b.time - a.time); saveJSON(LS_RECORDS, records);
+          renderSaved(); toast(`已导入 ${n} 条记录`);
+        } catch (e) { toast('导入失败：' + e.message); }
+      };
+      fr.readAsText(f);
+    };
+    inp.click();
+  });
+
+  document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); }));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-bg.show').forEach(m => m.classList.remove('show')); });
+
+  renderSaved();
+  updateAddrCount();
+})();
+</script>
+</body>
+</html>
